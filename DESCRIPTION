@@ -1,0 +1,29 @@
+Package: SlowScout
+Type: Application
+Title: SlowScout Basketball Analytics Dashboard
+Version: 1.0.0
+Author: Ayan Nath
+Description: Shiny dashboard for basketball analytics and scouting
+License: MIT
+Imports:
+    gt,
+    DT,
+    zoo,
+    pak,
+    shiny,
+    plotly,
+    reactR,
+    cowplot,
+    ggplot2,
+    janitor,
+    gtExtras,
+    reactable,
+    tidyverse,
+    paletteer,
+    mongolite,
+    comprehenr,
+    shinytitle,
+    shinyWidgets,
+    shinyvalidate,
+    shinydashboard
+

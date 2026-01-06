@@ -5,17 +5,48 @@ connection_url <- paste0("mongodb+srv://jeremydumalig:",
                          "@cluster0.ztfyaeg.mongodb.net/",
                          "STACKS")
 
-master_shots <- mongo(db="STACKS",
-                      collection="shots",
-                      url=connection_url)$find()
-master_events <- mongo(db="STACKS",
-                       collection="events",
-                       url=connection_url)$find()
-master_turnovers <- mongo(db="STACKS",
-                          collection="turnovers",
-                          url=connection_url)$find()
+# Load MongoDB data with error handling
+# If connection fails, create empty data frames to prevent app crash
+tryCatch({
+  master_shots <- mongo(db="STACKS",
+                        collection="shots",
+                        url=connection_url)$find()
+  if (nrow(master_shots) == 0) {
+    master_shots <- data.frame()
+  }
+}, error = function(e) {
+  warning("Failed to load master_shots from MongoDB: ", e$message)
+  master_shots <<- data.frame()
+})
+
+tryCatch({
+  master_events <- mongo(db="STACKS",
+                         collection="events",
+                         url=connection_url)$find()
+  if (nrow(master_events) == 0) {
+    master_events <- data.frame()
+  }
+}, error = function(e) {
+  warning("Failed to load master_events from MongoDB: ", e$message)
+  master_events <<- data.frame()
+})
+
+tryCatch({
+  master_turnovers <- mongo(db="STACKS",
+                            collection="turnovers",
+                            url=connection_url)$find()
+  if (nrow(master_turnovers) == 0) {
+    master_turnovers <- data.frame()
+  }
+}, error = function(e) {
+  warning("Failed to load master_turnovers from MongoDB: ", e$message)
+  master_turnovers <<- data.frame()
+})
 
 get_all_shots <- function(y=2024) {
+  if (nrow(master_shots) == 0) {
+    return(data.frame())
+  }
   if (y == 2024) {
     master_shots %>% 
       filter(as.Date(Date, format="%Y-%m-%d") < threshold) %>%
@@ -27,6 +58,9 @@ get_all_shots <- function(y=2024) {
   }
 }
 get_shots <- function(league, team, y=2024) {
+  if (nrow(master_shots) == 0) {
+    return(data.frame())
+  }
   if (y == 2024) {
     master_shots %>% 
       filter(League == league,
@@ -57,6 +91,9 @@ remove_shot <- function(id) {
 }
 
 get_all_turnovers <- function(y=2024) {
+  if (nrow(master_turnovers) == 0) {
+    return(data.frame())
+  }
   if (y == 2024) {
     master_turnovers %>% 
       filter(as.Date(Date, format="%Y-%m-%d") < threshold) %>%
@@ -68,6 +105,9 @@ get_all_turnovers <- function(y=2024) {
   }
 }
 get_turnovers <- function(league, team, y=2024) {
+  if (nrow(master_turnovers) == 0) {
+    return(data.frame())
+  }
   if (y == 2024) {
     master_turnovers %>% 
       filter(League == league,
@@ -98,6 +138,9 @@ remove_turnover <- function(id) {
 }
 
 get_all_events <- function(y=2024) {
+  if (nrow(master_events) == 0) {
+    return(data.frame())
+  }
   if (y == 2024) {
     master_events %>% 
       filter(as.Date(Date, format="%Y-%m-%d") < threshold) %>%
@@ -109,6 +152,9 @@ get_all_events <- function(y=2024) {
   }
 }
 get_events <- function(league, team, y=2024) {
+  if (nrow(master_events) == 0) {
+    return(data.frame())
+  }
   if (y == 2024) {
     master_events %>% 
       filter(League == league,
@@ -163,17 +209,31 @@ remove_event <- function(id) {
 
 new_row_id <- function(shot=F, event=F) {
   if (shot) {
-    df <- mongo(db="STACKS",
-                collection="shots",
-                url=connection_url)$find()
-    
-    return( max(max(df$`Shot ID`) + 1, nrow(df) + 1) )
+    tryCatch({
+      df <- mongo(db="STACKS",
+                  collection="shots",
+                  url=connection_url)$find()
+      
+      if (nrow(df) == 0 || !("Shot ID" %in% names(df))) {
+        return(1)
+      }
+      return( max(max(df$`Shot ID`, na.rm=TRUE) + 1, nrow(df) + 1, na.rm=TRUE) )
+    }, error = function(e) {
+      return(1)
+    })
   } else {
-    df <- mongo(db="STACKS",
-                collection="events",
-                url=connection_url)$find()
-    
-    return( max(max(df$`Event ID`) + 1, nrow(df) + 1) )
+    tryCatch({
+      df <- mongo(db="STACKS",
+                  collection="events",
+                  url=connection_url)$find()
+      
+      if (nrow(df) == 0 || !("Event ID" %in% names(df))) {
+        return(1)
+      }
+      return( max(max(df$`Event ID`, na.rm=TRUE) + 1, nrow(df) + 1, na.rm=TRUE) )
+    }, error = function(e) {
+      return(1)
+    })
   }
 }
 
@@ -202,7 +262,10 @@ db_backup <- function() {
 }
 
 get_points <- function(df) {
-  df %>%
+  if (nrow(df) == 0 || !("Outcome" %in% names(df))) {
+    return(data.frame(PTS = 0))
+  }
+  result <- df %>%
     filter((Outcome == "Make") | (str_detect(Outcome, "Foul"))) %>%
     mutate(Points = case_when((Outcome == "Foul (+3)") ~ 3,
                               (Outcome == "Foul (+2)") ~ 2,
@@ -210,5 +273,9 @@ get_points <- function(df) {
                               (Outcome == "Foul (+0)") ~ 0,
                               (Region %in% regions3) ~ 3,
                               TRUE ~ 2)) %>%
-    summarize(PTS = sum(Points))
+    summarize(PTS = sum(Points, na.rm=TRUE))
+  if (nrow(result) == 0 || is.na(result$PTS)) {
+    return(data.frame(PTS = 0))
+  }
+  return(result)
 }
