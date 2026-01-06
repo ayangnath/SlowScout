@@ -26,4 +26,5 @@ Imports:
     shinyWidgets,
     shinyvalidate,
     shinydashboard
+Depends: R (>= 4.0.0)
 
